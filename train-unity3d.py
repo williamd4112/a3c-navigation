@@ -48,7 +48,7 @@ CHANNEL = FRAME_HISTORY * 3
 IMAGE_SHAPE3 = IMAGE_SIZE + (CHANNEL,)
 
 LOCAL_TIME_MAX = 5
-STEPS_PER_EPOCH = 6000
+STEPS_PER_EPOCH = 600
 EVAL_EPISODE = 50
 BATCH_SIZE = 128
 PREDICT_BATCH_SIZE = 15     # batch for efficient forward
@@ -59,10 +59,11 @@ PREDICTOR_THREAD = None
 NUM_ACTIONS = None
 ENV_NAME = None
 
+SIMULATOR_IP_ADDRESS = '140.114.89.72'
 
 def get_player(connection, viz=False, train=False, dumpdir=None):
     #pl = GymEnv(ENV_NAME, viz=viz, dumpdir=dumpdir)
-    pl = Unity3DPlayer(connection=connection, skip=4)
+    pl = Unity3DPlayer(connection=connection, skip=1)
     if connection != None:
         pl = MapPlayerState(pl, lambda img: cv2.resize(img, IMAGE_SIZE[::-1]))
         pl = HistoryFramePlayer(pl, FRAME_HISTORY)
@@ -73,8 +74,14 @@ def get_player(connection, viz=False, train=False, dumpdir=None):
     return pl
 
 
-class MySimulatorWorker(SimulatorProcess):
-    def _build_player(self, connection):
+class MySimulatorWorker(SimulatorProcess): 
+    def __init__(self, idx, pipe_c2s, pipe_s2c, base_port):
+        super(MySimulatorWorker, self).__init__(idx, pipe_c2s, pipe_s2c)
+        self.base_port = base_port
+
+    def _build_player(self):
+        connection = (SIMULATOR_IP_ADDRESS, int(self.base_port + self.idx))
+        print(connection)
         return get_player(connection, train=True)
 
 
@@ -229,11 +236,12 @@ def get_config():
         predict_tower, train_tower = [0], [0]
 
     # setup simulator processes
+    base_port = args.base_port
     name_base = str(uuid.uuid1())[:6]
     PIPE_DIR = os.environ.get('TENSORPACK_PIPEDIR', '.').rstrip('/')
     namec2s = 'ipc://{}/sim-c2s-{}'.format(PIPE_DIR, name_base)
     names2c = 'ipc://{}/sim-s2c-{}'.format(PIPE_DIR, name_base)
-    procs = [MySimulatorWorker(k, namec2s, names2c) for k in range(SIMULATOR_PROC)]
+    procs = [MySimulatorWorker(k, namec2s, names2c, base_port=base_port) for k in range(SIMULATOR_PROC)]
     ensure_proc_terminate(procs)
     start_proc_mask_signal(procs)
 
@@ -245,8 +253,8 @@ def get_config():
         dataflow=dataflow,
         callbacks=[
             ModelSaver(),
-            ScheduledHyperParamSetter('learning_rate', [(20, 0.0003), (120, 0.0001)]),
-            ScheduledHyperParamSetter('entropy_beta', [(80, 0.005)]),
+            ScheduledHyperParamSetter('learning_rate', [(200, 0.0003), (1200, 0.0001)]),
+            ScheduledHyperParamSetter('entropy_beta', [(800, 0.005)]),
             HumanHyperParamSetter('learning_rate'),
             HumanHyperParamSetter('entropy_beta'),
             master,
@@ -258,7 +266,7 @@ def get_config():
         session_creator=sesscreate.NewSessionCreator(
             config=get_default_sess_config(0.5)),
         steps_per_epoch=STEPS_PER_EPOCH,
-        max_epoch=1000,
+        max_epoch=10000,
         tower=train_tower
     )
 
@@ -267,6 +275,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--gpu', help='comma separated list of GPU(s) to use.')
     parser.add_argument('--load', help='load model')
+    parser.add_argument('--base_port', help='base port', required=True, type=int)
     parser.add_argument('--env', help='env', default='navigation-v0')
     parser.add_argument('--task', help='task to perform',
                         choices=['play', 'eval', 'train', 'gen_submit'], default='train')

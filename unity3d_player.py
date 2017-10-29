@@ -19,9 +19,9 @@ class Unity3DPlayer(RLEnvironment):
                     (0.5, -1.0), # Forward-Left
                     (-0.5, -1.0) ] # Backward-Left 
     '''
-    ACTION_TABLE = [(2.0, 0.0),
-                    (2.0, 0.3),
-                    (2.0, -0.3)]
+    ACTION_TABLE = [(2.7, 0.0),
+                    (2.7, 1.5),
+                    (2.7, -1.5)]
 
     def __init__(self, connection, skip=1, dumpdir=None, viz=False, auto_restart=True):
         if connection != None:
@@ -52,8 +52,6 @@ class Unity3DPlayer(RLEnvironment):
         env_act = self.ACTION_TABLE[act]
         for i in range(self.skip):
             self._ob, r, isOver, info = self.gymenv.step(env_act)
-            if r > 0.0:
-                r = 0.0
             if r < 0.0:
                 isOver = True
             if isOver:
