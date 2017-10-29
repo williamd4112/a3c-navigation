@@ -9,6 +9,7 @@ from unity3d_env import Unity3DEnvironment
 
 __all__ = ['GymEnv']
 _ENV_LOCK = threading.Lock()
+ACTION_SCALE = 8.0
 
 class Unity3DPlayer(RLEnvironment):
     '''
@@ -19,9 +20,9 @@ class Unity3DPlayer(RLEnvironment):
                     (0.5, -1.0), # Forward-Left
                     (-0.5, -1.0) ] # Backward-Left 
     '''
-    ACTION_TABLE = [(2.7, 0.0),
-                    (2.7, 1.5),
-                    (2.7, -1.5)]
+    ACTION_TABLE = [(1.5 * ACTION_SCALE, 0.0 * ACTION_SCALE),
+                    (1.5 * ACTION_SCALE, 0.75 * ACTION_SCALE),
+                    (1.5 * ACTION_SCALE, -0.75 * ACTION_SCALE)]
 
     def __init__(self, connection, skip=1, dumpdir=None, viz=False, auto_restart=True):
         if connection != None:
@@ -37,6 +38,7 @@ class Unity3DPlayer(RLEnvironment):
 
     def restart_episode(self):
         self.rwd_counter.reset()
+        self.rwd_counter.feed(0)
         self._ob = self.gymenv.reset()
 
     def finish_episode(self):
@@ -52,6 +54,8 @@ class Unity3DPlayer(RLEnvironment):
         env_act = self.ACTION_TABLE[act]
         for i in range(self.skip):
             self._ob, r, isOver, info = self.gymenv.step(env_act)
+            if r > 0:
+                r *= 0.01
             if r < 0.0:
                 isOver = True
             if isOver:

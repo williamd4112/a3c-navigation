@@ -52,7 +52,7 @@ STEPS_PER_EPOCH = 600
 EVAL_EPISODE = 50
 BATCH_SIZE = 128
 PREDICT_BATCH_SIZE = 15     # batch for efficient forward
-SIMULATOR_PROC = 16
+SIMULATOR_PROC = None
 PREDICTOR_THREAD_PER_GPU = 3
 PREDICTOR_THREAD = None
 
@@ -70,7 +70,7 @@ def get_player(connection, viz=False, train=False, dumpdir=None):
         if not train:
             pl = PreventStuckPlayer(pl, 30, 1)
         else:
-            pl = LimitLengthPlayer(pl, 500)
+            pl = LimitLengthPlayer(pl, 100)
     return pl
 
 
@@ -276,6 +276,7 @@ if __name__ == '__main__':
     parser.add_argument('--gpu', help='comma separated list of GPU(s) to use.')
     parser.add_argument('--load', help='load model')
     parser.add_argument('--base_port', help='base port', required=True, type=int)
+    parser.add_argument('--n_proc', help='n_proc', required=True, type=int)
     parser.add_argument('--env', help='env', default='navigation-v0')
     parser.add_argument('--task', help='task to perform',
                         choices=['play', 'eval', 'train', 'gen_submit'], default='train')
@@ -284,6 +285,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     ENV_NAME = args.env
+    SIMULATOR_PROC = args.n_proc
     logger.info("Environment Name: {}".format(ENV_NAME))
     NUM_ACTIONS = get_player(connection=None).get_action_space().num_actions()
     logger.info("Number of actions: {}".format(NUM_ACTIONS))
