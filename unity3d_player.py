@@ -11,7 +11,7 @@ import cv2
 
 __all__ = ['GymEnv']
 _ENV_LOCK = threading.Lock()
-ACTION_SCALE = 1.0
+ACTION_SCALE = 5.0
 
 class Unity3DPlayer(RLEnvironment):
     '''
