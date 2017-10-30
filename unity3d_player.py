@@ -11,7 +11,7 @@ import cv2
 
 __all__ = ['GymEnv']
 _ENV_LOCK = threading.Lock()
-ACTION_SCALE = 5.0
+ACTION_SCALE = 4.0
 
 class Unity3DPlayer(RLEnvironment):
     '''
@@ -22,9 +22,9 @@ class Unity3DPlayer(RLEnvironment):
                     (0.5, -1.0), # Forward-Left
                     (-0.5, -1.0) ] # Backward-Left 
     '''
-    ACTION_TABLE = [(1.5 * ACTION_SCALE, 0.0 * ACTION_SCALE),
-                    (1.5 * ACTION_SCALE, 0.3 * ACTION_SCALE),
-                    (1.5 * ACTION_SCALE, -0.3 * ACTION_SCALE)]
+    ACTION_TABLE = [(2.0 * ACTION_SCALE, 0.0 * ACTION_SCALE),
+                    (2.0 * ACTION_SCALE, 0.5 * ACTION_SCALE),
+                    (2.0 * ACTION_SCALE, -0.5 * ACTION_SCALE)]
 
     def __init__(self, connection, skip=1, dumpdir=None, viz=False, auto_restart=True):
         if connection != None:
