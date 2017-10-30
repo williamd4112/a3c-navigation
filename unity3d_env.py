@@ -133,11 +133,12 @@ class Unity3DEnvironment(object):
     
     def reset(self):
         # TODO: Reset the unity scene
+        done = True
         self.sock.send(self.action_space.reset())
         self.sock.send(self.action_space.noop())
-        done = True
         while done:
             obs, reward, done, _ = self._recv_next_state()
+            print('Reset ', done)
         return obs
 
     def step(self, act, non_block=False):
@@ -147,7 +148,6 @@ class Unity3DEnvironment(object):
         TODO: More general action space
         '''
         sendData = self.action_space.pack(act)
-    
         self.sock.send(sendData)
         
         if not non_block:

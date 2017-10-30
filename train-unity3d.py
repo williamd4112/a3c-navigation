@@ -70,7 +70,7 @@ def get_player(connection, viz=False, train=False, dumpdir=None):
         if not train:
             pl = PreventStuckPlayer(pl, 30, 1)
         else:
-            pl = LimitLengthPlayer(pl, 100)
+            pl = LimitLengthPlayer(pl, 5000)
     return pl
 
 

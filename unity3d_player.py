@@ -7,9 +7,11 @@ from tensorpack.RL.envbase import RLEnvironment, DiscreteActionSpace
 
 from unity3d_env import Unity3DEnvironment
 
+import cv2
+
 __all__ = ['GymEnv']
 _ENV_LOCK = threading.Lock()
-ACTION_SCALE = 8.0
+ACTION_SCALE = 1.0
 
 class Unity3DPlayer(RLEnvironment):
     '''
@@ -21,8 +23,8 @@ class Unity3DPlayer(RLEnvironment):
                     (-0.5, -1.0) ] # Backward-Left 
     '''
     ACTION_TABLE = [(1.5 * ACTION_SCALE, 0.0 * ACTION_SCALE),
-                    (1.5 * ACTION_SCALE, 0.75 * ACTION_SCALE),
-                    (1.5 * ACTION_SCALE, -0.75 * ACTION_SCALE)]
+                    (1.5 * ACTION_SCALE, 0.3 * ACTION_SCALE),
+                    (1.5 * ACTION_SCALE, -0.3 * ACTION_SCALE)]
 
     def __init__(self, connection, skip=1, dumpdir=None, viz=False, auto_restart=True):
         if connection != None:
@@ -35,6 +37,7 @@ class Unity3DPlayer(RLEnvironment):
             self.restart_episode()
             self.auto_restart = auto_restart
             self.viz = viz
+        self.connection = connection
 
     def restart_episode(self):
         self.rwd_counter.reset()
@@ -48,6 +51,7 @@ class Unity3DPlayer(RLEnvironment):
         if self.viz:
             self.gymenv.render()
             time.sleep(self.viz)
+        cv2.imwrite('state_%04d.png' % self.connection[1], self._ob)
         return self._ob
 
     def action(self, act):
@@ -55,7 +59,7 @@ class Unity3DPlayer(RLEnvironment):
         for i in range(self.skip):
             self._ob, r, isOver, info = self.gymenv.step(env_act)
             if r > 0:
-                r *= 0.01
+                r = 0.0
             if r < 0.0:
                 isOver = True
             if isOver:
@@ -75,29 +79,16 @@ class Unity3DPlayer(RLEnvironment):
 
 if __name__ == '__main__':
     import sys
-    ip = sys.argv[1]
-    port = int(sys.argv[2])
+    ip = '140.114.89.72'
+    port = 8000
     p = Unity3DPlayer(connection=(ip, port))
     p.restart_episode()
     try:
         for i in range(100000):
-            key = input()
+            act = p.get_action_space().sample()
             act = 0
-            print(key)
-            if key == 'w':
-                act = 0
-            elif key == 's':
-                act = 1
-            elif key == 'e':
-                act = 2
-            elif key == 'c':
-                act = 3
-            elif key == 'q':
-                act = 4
-            elif key == 'z':
-                act = 5
             r, done = p.action(act)
-            print(r)
+            print(done)
     except:
         p.close()
 
