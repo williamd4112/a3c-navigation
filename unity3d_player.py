@@ -41,7 +41,7 @@ class Unity3DPlayer(RLEnvironment):
     def _process_state(self, s):
         s = (s * 255.0).astype(np.uint8)
         s = cv2.cvtColor(s, cv2.COLOR_RGB2BGR)
-        return s * 255.0
+        return s
 
     def restart_episode(self):
         self.rwd_counter.reset()
@@ -82,7 +82,7 @@ class Unity3DPlayer(RLEnvironment):
 if __name__ == '__main__':
     import sys
     from tqdm import *
-    p = Unity3DPlayer(env_name='Navigation', base_port=9999, worker_id=0, mode=False)
+    p = Unity3DPlayer(env_name='Navigation-random', base_port=9999, worker_id=0, mode=False)
     p.restart_episode()
     try:
         while True:
@@ -90,7 +90,6 @@ if __name__ == '__main__':
                 act = p.get_action_space().sample()
                 r, done = p.action(act)
                 obs = p.current_state()
-                obs *= 255.0
                 cv2.imwrite('img_%03d.png' % i, obs)
                 print(obs)
             break
