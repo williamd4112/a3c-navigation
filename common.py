@@ -37,10 +37,11 @@ def play_model(cfg, player):
 
 def eval_with_funcs(predictors, nr_eval, get_player_fn):
     class Worker(StoppableThread, ShareSessionThread):
-        def __init__(self, func, queue):
+        def __init__(self, func, queue, idx):
             super(Worker, self).__init__()
             self._func = func
             self.q = queue
+            self.idx = idx
 
         def func(self, *args, **kwargs):
             if self.stopped():
@@ -49,17 +50,18 @@ def eval_with_funcs(predictors, nr_eval, get_player_fn):
 
         def run(self):
             with self.default_sess():
-                player = get_player_fn(train=False)
+                player = get_player_fn(worker_id=self.idx, train=False)
                 while not self.stopped():
                     try:
                         score = play_one_episode(player, self.func)
+                        player.close()
                         # print("Score, ", score)
                     except RuntimeError:
                         return
                     self.queue_put_stoppable(self.q, score)
 
     q = queue.Queue()
-    threads = [Worker(f, q) for f in predictors]
+    threads = [Worker(f, q, idx) for idx, f in enumerate(predictors)]
 
     for k in threads:
         k.start()
@@ -92,25 +94,36 @@ def eval_model_multithread(cfg, nr_eval, get_player_fn):
     logger.info("Average Score: {}; Max Score: {}".format(mean, max))
 
 
+def eval_one_episode(player, func, verbose=False):
+    def f(s):
+        spc = player.get_action_space()
+        probs = func([[s]])[0][0]
+        act = np.random.choice(range(spc.num_actions()), p=probs)
+        return act
+    return (player.play_one_episode(f))
+
 class Evaluator(Triggerable):
     def __init__(self, nr_eval, input_names, output_names, get_player_fn):
         self.eval_episode = nr_eval
         self.input_names = input_names
         self.output_names = output_names
         self.get_player_fn = get_player_fn
+        self.player = self.get_player_fn(worker_id=0, train=False)
 
     def _setup_graph(self):
-        NR_PROC = min(multiprocessing.cpu_count() // 2, 20)
-        self.pred_funcs = [self.trainer.get_predictor(
-            self.input_names, self.output_names)] * NR_PROC
+        #NR_PROC = min(multiprocessing.cpu_count() // 2, 2)
+        self.pred_func = self.trainer.get_predictor(self.input_names, self.output_names)
 
     def _trigger(self):
-        t = time.time()
-        mean, max = eval_with_funcs(
-            self.pred_funcs, self.eval_episode, self.get_player_fn)
-        t = time.time() - t
-        if t > 10 * 60:  # eval takes too long
-            self.eval_episode = int(self.eval_episode * 0.94)
+        player = self.player
+        player.restart_episode()
+        scores = []
+        for ep in tqdm(range(self.eval_episode)):
+            score = eval_one_episode(player=player, func=self.pred_func)
+            scores.append(score)
+        scores = np.array(scores)
+        mean = scores.mean()
+        max = scores.max()
         self.trainer.monitors.put_scalar('mean_score', mean)
         self.trainer.monitors.put_scalar('max_score', max)
 

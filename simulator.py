@@ -26,6 +26,8 @@ __all__ = ['SimulatorProcess', 'SimulatorMaster',
            'SimulatorProcessStateExchange',
            'TransitionExperience']
 
+ENV_LOCK = mp.Lock()
+
 class TransitionExperience(object):
     """ A transition of state, or experience"""
 
@@ -67,7 +69,9 @@ class SimulatorProcessStateExchange(SimulatorProcessBase):
         self.s2c = pipe_s2c
 
     def run(self):
-        player = self._build_player()
+        with ENV_LOCK:
+            player = self._build_player()
+            time.sleep(5)
         context = zmq.Context()
         c2s_socket = context.socket(zmq.PUSH)
         c2s_socket.setsockopt(zmq.IDENTITY, self.identity)

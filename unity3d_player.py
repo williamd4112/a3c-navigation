@@ -4,14 +4,14 @@ import threading
 from tensorpack.utils.fs import mkdir_p
 from tensorpack.utils.stats import StatCounter
 from tensorpack.RL.envbase import RLEnvironment, DiscreteActionSpace
-
-from unity3d_env import Unity3DEnvironment
+import numpy as np
+from unityagents import UnityEnvironment
 
 import cv2
 
 __all__ = ['GymEnv']
-_ENV_LOCK = threading.Lock()
-ACTION_SCALE = 4.0
+
+ACTION_SCALE = 1.0
 
 class Unity3DPlayer(RLEnvironment):
     '''
@@ -22,54 +22,56 @@ class Unity3DPlayer(RLEnvironment):
                     (0.5, -1.0), # Forward-Left
                     (-0.5, -1.0) ] # Backward-Left 
     '''
-    ACTION_TABLE = [(2.0 * ACTION_SCALE, 0.0 * ACTION_SCALE),
-                    (2.0 * ACTION_SCALE, 0.5 * ACTION_SCALE),
-                    (2.0 * ACTION_SCALE, -0.5 * ACTION_SCALE)]
+    ACTION_TABLE = [(1.5 * ACTION_SCALE, 0.0 * ACTION_SCALE),
+                    (1.5 * ACTION_SCALE, 1.0 * ACTION_SCALE),
+                    (1.5 * ACTION_SCALE, -1.0 * ACTION_SCALE)]
 
-    def __init__(self, connection, skip=1, dumpdir=None, viz=False, auto_restart=True):
-        if connection != None:
-            with _ENV_LOCK:
-                self.gymenv = Unity3DEnvironment(server_address=connection)
-            self.use_dir = dumpdir
-            self.skip = skip
-            self.reset_stat()
-            self.rwd_counter = StatCounter()
-            self.restart_episode()
-            self.auto_restart = auto_restart
-            self.viz = viz
-        self.connection = connection
+    def __init__(self, env_name, base_port, worker_id, mode, skip=1, dumpdir=None, viz=False, auto_restart=True):
+        self.gymenv = UnityEnvironment(file_name=env_name, base_port=base_port, worker_id=worker_id)
+        self.skip = skip
+        self.brain_idx = self.gymenv.brain_names[0]
+        self.mode = mode
+        self.reset_stat()
+        self.rwd_counter = StatCounter()
+        self.restart_episode()
+        self.auto_restart = auto_restart
+        self.viz = viz
+        self.worker_id = worker_id
+
+    def _process_state(self, s):
+        s = (s * 255.0).astype(np.uint8)
+        s = cv2.cvtColor(s, cv2.COLOR_RGB2BGR)
+        return s * 255.0
 
     def restart_episode(self):
         self.rwd_counter.reset()
         self.rwd_counter.feed(0)
-        self._ob = self.gymenv.reset()
+        env_info = self.gymenv.reset(train_mode=self.mode)[self.brain_idx]
+        self._ob = self._process_state(env_info.observations[0][0])
+        return self._ob
 
     def finish_episode(self):
         self.stats['score'].append(self.rwd_counter.sum)
 
     def current_state(self):
-        if self.viz:
-            self.gymenv.render()
-            time.sleep(self.viz)
-        cv2.imwrite('state_%04d.png' % self.connection[1], self._ob)
+        cv2.imwrite('state_%02d.png' % self.worker_id, self._ob)
         return self._ob
 
     def action(self, act):
         env_act = self.ACTION_TABLE[act]
         for i in range(self.skip):
-            self._ob, r, isOver, info = self.gymenv.step(env_act)
-            if r > 0:
-                r = 0.0
-            if r < 0.0:
-                isOver = True
-            if isOver:
+            env_info = self.gymenv.step(np.asarray([env_act]))[self.brain_idx]
+            self._ob = self._process_state(env_info.observations[0][0])
+            reward = env_info.rewards[0]
+            done = env_info.local_done[0]
+            if done:
                 break            
-        self.rwd_counter.feed(r)
-        if isOver:
+        self.rwd_counter.feed(reward)
+        if done:
             self.finish_episode()
             if self.auto_restart:
                 self.restart_episode()
-        return r, isOver
+        return reward, done
 
     def get_action_space(self):
         return DiscreteActionSpace(len(self.ACTION_TABLE))
@@ -79,16 +81,19 @@ class Unity3DPlayer(RLEnvironment):
 
 if __name__ == '__main__':
     import sys
-    ip = '140.114.89.72'
-    port = 8000
-    p = Unity3DPlayer(connection=(ip, port))
+    from tqdm import *
+    p = Unity3DPlayer(env_name='Navigation', base_port=9999, worker_id=0, mode=False)
     p.restart_episode()
     try:
-        for i in range(100000):
-            act = p.get_action_space().sample()
-            act = 0
-            r, done = p.action(act)
-            print(done)
-    except:
+        while True:
+            for i in tqdm(range(10)):
+                act = p.get_action_space().sample()
+                r, done = p.action(act)
+                obs = p.current_state()
+                obs *= 255.0
+                cv2.imwrite('img_%03d.png' % i, obs)
+                print(obs)
+            break
+    finally:
         p.close()
 

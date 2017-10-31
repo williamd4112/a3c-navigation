@@ -49,11 +49,11 @@ IMAGE_SHAPE3 = IMAGE_SIZE + (CHANNEL,)
 
 LOCAL_TIME_MAX = 5
 STEPS_PER_EPOCH = 600
-EVAL_EPISODE = 50
+EVAL_EPISODE = 5
 BATCH_SIZE = 128
 PREDICT_BATCH_SIZE = 15     # batch for efficient forward
 SIMULATOR_PROC = None
-PREDICTOR_THREAD_PER_GPU = 3
+PREDICTOR_THREAD_PER_GPU = 1
 PREDICTOR_THREAD = None
 
 NUM_ACTIONS = None
@@ -61,18 +61,29 @@ ENV_NAME = None
 
 SIMULATOR_IP_ADDRESS = '140.114.89.72'
 
-def get_player(connection, viz=False, train=False, dumpdir=None):
-    #pl = GymEnv(ENV_NAME, viz=viz, dumpdir=dumpdir)
-    pl = Unity3DPlayer(connection=connection, skip=1)
-    if connection != None:
-        pl = MapPlayerState(pl, lambda img: cv2.resize(img, IMAGE_SIZE[::-1]))
-        pl = HistoryFramePlayer(pl, FRAME_HISTORY)
-        if not train:
-            pl = PreventStuckPlayer(pl, 30, 1)
-        else:
-            pl = LimitLengthPlayer(pl, 5000)
+class CloseablePlayer(ProxyPlayer):
+    def __init__(self, pl, close_target):
+        super(CloseablePlayer, self).__init__(pl)
+        self.close_target = close_target
+    def close(self):
+        self.close_target.close()
+
+def get_player(base_port, worker_id, viz=False, train=False, dumpdir=None, no_wrappers=False):
+    # no_wrappers: for get raw player
+    u3dpl = Unity3DPlayer(env_name=ENV_NAME, worker_id=worker_id, base_port=base_port, mode=train)
+    if no_wrappers:
+        return u3dpl
+    pl = MapPlayerState(u3dpl, lambda img: cv2.resize(img, IMAGE_SIZE[::-1]))
+    pl = HistoryFramePlayer(pl, FRAME_HISTORY)
+    if not train:
+        pl = PreventStuckPlayer(pl, 30, 1)
+    else:
+        pl = LimitLengthPlayer(pl, 5000)
+    pl = CloseablePlayer(pl, u3dpl)
     return pl
 
+def get_eval_player(worker_id, train):
+    return get_player(base_port=5000, worker_id=worker_id, train=train)
 
 class MySimulatorWorker(SimulatorProcess): 
     def __init__(self, idx, pipe_c2s, pipe_s2c, base_port):
@@ -80,9 +91,7 @@ class MySimulatorWorker(SimulatorProcess):
         self.base_port = base_port
 
     def _build_player(self):
-        connection = (SIMULATOR_IP_ADDRESS, int(self.base_port + self.idx))
-        print(connection)
-        return get_player(connection, train=True)
+        return get_player(base_port=self.base_port, worker_id=self.idx, train=True)
 
 
 class Model(ModelDesc):
@@ -259,9 +268,10 @@ def get_config():
             HumanHyperParamSetter('entropy_beta'),
             master,
             StartProcOrThread(master),
-            #PeriodicTrigger(Evaluator(
-            #    EVAL_EPISODE, ['state'], ['policy'], get_player),
-            #    every_k_epochs=3),
+            PeriodicTrigger(Evaluator(
+                EVAL_EPISODE, ['state'], ['policy'], get_eval_player),
+                every_k_epochs=1),
+            
         ],
         session_creator=sesscreate.NewSessionCreator(
             config=get_default_sess_config(0.5)),
@@ -277,7 +287,7 @@ if __name__ == '__main__':
     parser.add_argument('--load', help='load model')
     parser.add_argument('--base_port', help='base port', required=True, type=int)
     parser.add_argument('--n_proc', help='n_proc', required=True, type=int)
-    parser.add_argument('--env', help='env', default='navigation-v0')
+    parser.add_argument('--env', help='env', default='Navigation')
     parser.add_argument('--task', help='task to perform',
                         choices=['play', 'eval', 'train', 'gen_submit'], default='train')
     parser.add_argument('--output', help='output directory for submission', default='output_dir')
@@ -287,7 +297,12 @@ if __name__ == '__main__':
     ENV_NAME = args.env
     SIMULATOR_PROC = args.n_proc
     logger.info("Environment Name: {}".format(ENV_NAME))
-    NUM_ACTIONS = get_player(connection=None).get_action_space().num_actions()
+
+    # port 9000 is used for get_action space
+    tmp_player = get_player(base_port=9000, worker_id=0, no_wrappers=True)
+    NUM_ACTIONS = tmp_player.get_action_space().num_actions()
+    tmp_player.close()
+    del tmp_player 
     logger.info("Number of actions: {}".format(NUM_ACTIONS))
 
     if args.gpu:
@@ -301,14 +316,16 @@ if __name__ == '__main__':
             input_names=['state'],
             output_names=['policy'])
         if args.task == 'play':
-            play_model(cfg, get_player(viz=0.01))
+            play_model(cfg, get_player(base_port=8000, worker_id=0, viz=0.01))
         elif args.task == 'eval':
-            eval_model_multithread(cfg, args.episode, get_player)
+            eval_model_multithread(cfg, args.episode, get_eval_player)
+        '''
         elif args.task == 'gen_submit':
             play_n_episodes(
                 get_player(train=False, dumpdir=args.output),
                 OfflinePredictor(cfg), args.episode)
             # gym.upload(output, api_key='xxx')
+        '''
     else:
         dirname = os.path.join('train_log', 'train-unity3d-{}'.format(ENV_NAME))
         logger.set_logger_dir(dirname)
