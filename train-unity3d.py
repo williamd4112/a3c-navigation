@@ -60,6 +60,8 @@ NUM_ACTIONS = None
 ENV_NAME = None
 
 SIMULATOR_IP_ADDRESS = '140.114.89.72'
+EVAL_PORT = None
+ACTION_SPACE_PORT = None
 
 class CloseablePlayer(ProxyPlayer):
     def __init__(self, pl, close_target):
@@ -83,7 +85,7 @@ def get_player(base_port, worker_id, viz=False, train=False, dumpdir=None, no_wr
     return pl
 
 def get_eval_player(worker_id, train):
-    return get_player(base_port=5000, worker_id=worker_id, train=train)
+    return get_player(base_port=EVAL_PORT, worker_id=worker_id, train=train)
 
 class MySimulatorWorker(SimulatorProcess): 
     def __init__(self, idx, pipe_c2s, pipe_s2c, base_port):
@@ -296,10 +298,15 @@ if __name__ == '__main__':
 
     ENV_NAME = args.env
     SIMULATOR_PROC = args.n_proc
+    EVAL_PORT = args.base_port + 1
+    args.base_port += 1
+    ACTION_SPACE_PORT = args.base_port + 1
+    args.base_port += 1
     logger.info("Environment Name: {}".format(ENV_NAME))
 
     # port 9000 is used for get_action space
-    tmp_player = get_player(base_port=9000, worker_id=0, no_wrappers=True)
+    tmp_player = get_player(base_port=ACTION_SPACE_PORT, worker_id=0, no_wrappers=True)
+
     NUM_ACTIONS = tmp_player.get_action_space().num_actions()
     tmp_player.close()
     del tmp_player 

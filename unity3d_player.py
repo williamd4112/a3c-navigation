@@ -33,6 +33,8 @@ class Unity3DPlayer(RLEnvironment):
         self.mode = mode
         self.reset_stat()
         self.rwd_counter = StatCounter()
+        # Wait unity env ready
+        time.sleep(5.0)        
         self.restart_episode()
         self.auto_restart = auto_restart
         self.viz = viz
