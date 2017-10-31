@@ -34,6 +34,7 @@ from common import (play_model, Evaluator, eval_model_multithread,
                     play_one_episode, play_n_episodes)
 
 from unity3d_player import Unity3DPlayer
+from tensorflow.contrib.slim.nets import resnet_v2
 
 if six.PY3:
     from concurrent import futures
@@ -41,7 +42,7 @@ if six.PY3:
 else:
     CancelledError = Exception
 
-IMAGE_SIZE = (84, 84)
+IMAGE_SIZE = (224, 224)
 FRAME_HISTORY = 1
 GAMMA = 0.99
 CHANNEL = FRAME_HISTORY * 3
@@ -107,6 +108,7 @@ class Model(ModelDesc):
 
     def _get_NN_prediction(self, image):
         image = tf.cast(image, tf.float32) / 255.0
+        '''
         with argscope(Conv2D, nl=tf.nn.relu):
             l = Conv2D('conv0', image, out_channel=32, kernel_shape=5)
             l = MaxPooling('pool0', l, 2)
@@ -115,7 +117,8 @@ class Model(ModelDesc):
             l = Conv2D('conv2', l, out_channel=64, kernel_shape=4)
             l = MaxPooling('pool2', l, 2)
             l = Conv2D('conv3', l, out_channel=64, kernel_shape=3)
-
+        '''
+        l, end_point = resnet_v2.resnet_v2_101(image)
         l = FullyConnected('fc0', l, 512, nl=tf.identity)
         l = PReLU('prelu', l)
         logits = FullyConnected('fc-pi', l, out_dim=NUM_ACTIONS, nl=tf.identity)    # unnormalized policy
