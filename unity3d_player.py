@@ -28,6 +28,7 @@ class Unity3DPlayer(RLEnvironment):
 
     def __init__(self, env_name, base_port, worker_id, mode, skip=1, dumpdir=None, viz=False, auto_restart=True):
         self.gymenv = UnityEnvironment(file_name=env_name, base_port=base_port, worker_id=worker_id)
+        print(str(self.gymenv))
         self.skip = skip
         self.brain_idx = self.gymenv.brain_names[0]
         self.mode = mode
@@ -84,11 +85,12 @@ class Unity3DPlayer(RLEnvironment):
 if __name__ == '__main__':
     import sys
     from tqdm import *
-    p = Unity3DPlayer(env_name='Navigation-random', base_port=9999, worker_id=0, mode=False)
+    p = Unity3DPlayer(env_name='Navigation', base_port=9000, worker_id=0, mode=False)
     p.restart_episode()
     try:
         while True:
             for i in tqdm(range(10)):
+                print(i)
                 act = p.get_action_space().sample()
                 r, done = p.action(act)
                 obs = p.current_state()
