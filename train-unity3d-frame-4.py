@@ -42,7 +42,7 @@ else:
     CancelledError = Exception
 
 IMAGE_SIZE = (84, 84)
-FRAME_HISTORY = 1
+FRAME_HISTORY = 4
 GAMMA = 0.99
 CHANNEL = FRAME_HISTORY * 3
 IMAGE_SHAPE3 = IMAGE_SIZE + (CHANNEL,)
@@ -336,9 +336,9 @@ if __name__ == '__main__':
         '''
     else:
         if args.logdir:
-            dirname = os.path.join('train_log', 'train-unity3d-{}-{}'.format(ENV_NAME, args.logdir))
+            dirname = os.path.join('train_log', 'train-unity3d-hist-{}-{}-{}'.format(ENV_NAME, FRAME_HISTORY, args.logdir))
         else:
-            dirname = os.path.join('train_log', 'train-unity3d-{}'.format(ENV_NAME))
+            dirname = os.path.join('train_log', 'train-unity3d-hist-{}'.format(ENV_NAME, FRAME_HISTORY))
         logger.set_logger_dir(dirname)
 
         config = get_config()
