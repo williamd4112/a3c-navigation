@@ -47,7 +47,7 @@ GAMMA = 0.99
 CHANNEL = FRAME_HISTORY * 3
 IMAGE_SHAPE3 = IMAGE_SIZE + (CHANNEL,)
 
-LOCAL_TIME_MAX = 5
+LOCAL_TIME_MAX = 50
 STEPS_PER_EPOCH = 600
 EVAL_EPISODE = 5
 BATCH_SIZE = 128
@@ -293,6 +293,7 @@ if __name__ == '__main__':
     parser.add_argument('--task', help='task to perform',
                         choices=['play', 'eval', 'train', 'gen_submit'], default='train')
     parser.add_argument('--output', help='output directory for submission', default='output_dir')
+    parser.add_argument('--logdir', help='log directory', default=None)
     parser.add_argument('--episode', help='number of episode to eval', default=100, type=int)
     args = parser.parse_args()
 
@@ -334,7 +335,10 @@ if __name__ == '__main__':
             # gym.upload(output, api_key='xxx')
         '''
     else:
-        dirname = os.path.join('train_log', 'train-unity3d-{}'.format(ENV_NAME))
+        if args.logdir:
+            dirname = os.path.join('train_log', 'train-unity3d-{}-{}'.format(ENV_NAME, args.logdir))
+        else:
+            dirname = os.path.join('train_log', 'train-unity3d-{}'.format(ENV_NAME))
         logger.set_logger_dir(dirname)
 
         config = get_config()

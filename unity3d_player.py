@@ -23,8 +23,8 @@ class Unity3DPlayer(RLEnvironment):
                     (-0.5, -1.0) ] # Backward-Left 
     '''
     ACTION_TABLE = [(1.0 * ACTION_SCALE, 0.0 * ACTION_SCALE),
-                    (1.0 * ACTION_SCALE, 1.0 * ACTION_SCALE),
-                    (1.0 * ACTION_SCALE, -1.0 * ACTION_SCALE)]
+                    (0.75 * ACTION_SCALE, 1.0 * ACTION_SCALE),
+                    (0.75 * ACTION_SCALE, -1.0 * ACTION_SCALE)]
 
     def __init__(self, env_name, base_port, worker_id, mode, skip=1, dumpdir=None, viz=False, auto_restart=True):
         self.gymenv = UnityEnvironment(file_name=env_name, base_port=base_port, worker_id=worker_id)
@@ -35,7 +35,7 @@ class Unity3DPlayer(RLEnvironment):
         self.reset_stat()
         self.rwd_counter = StatCounter()
         # Wait unity env ready
-        time.sleep(5.0)        
+        time.sleep(10.0)        
         self.restart_episode()
         self.auto_restart = auto_restart
         self.viz = viz
