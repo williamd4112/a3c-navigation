@@ -13,7 +13,8 @@ import argparse
 import multiprocessing
 import threading
 
-import cv2
+#import cv2
+from PIL import Image
 import tensorflow as tf
 import six
 from six.moves import queue
@@ -75,7 +76,9 @@ def get_player(base_port, worker_id, viz=False, train=False, dumpdir=None, no_wr
     u3dpl = Unity3DPlayer(env_name=ENV_NAME, worker_id=worker_id, base_port=base_port, mode=train)
     if no_wrappers:
         return u3dpl
-    pl = MapPlayerState(u3dpl, lambda img: cv2.resize(img, IMAGE_SIZE[::-1]))
+    #pl = MapPlayerState(u3dpl, lambda img: cv2.resize(img, IMAGE_SIZE[::-1]))
+    pl = MapPlayerState(u3dpl, lambda img: np.array(Image.fromarray(img).resize(IMAGE_SIZE, resample=Image.BILINEAR), dtype=np.uint8))
+
     pl = HistoryFramePlayer(pl, FRAME_HISTORY)
     if not train:
         pl = PreventStuckPlayer(pl, 30, 1)
@@ -336,9 +339,9 @@ if __name__ == '__main__':
         '''
     else:
         if args.logdir:
-            dirname = os.path.join('train_log', 'train-unity3d-hist-{}-{}-{}'.format(ENV_NAME, FRAME_HISTORY, args.logdir))
+            dirname = os.path.join('train_log', 'train-unity3d-hist-4-{}-{}'.format(ENV_NAME, args.logdir))
         else:
-            dirname = os.path.join('train_log', 'train-unity3d-hist-{}'.format(ENV_NAME, FRAME_HISTORY))
+            dirname = os.path.join('train_log', 'train-unity3d-hist-4-{}'.format(ENV_NAME))
         logger.set_logger_dir(dirname)
 
         config = get_config()

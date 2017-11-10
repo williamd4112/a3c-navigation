@@ -43,7 +43,7 @@ class Unity3DPlayer(RLEnvironment):
 
     def _process_state(self, s):
         s = (s * 255.0).astype(np.uint8)
-        s = cv2.cvtColor(s, cv2.COLOR_RGB2BGR)
+        #s = cv2.cvtColor(s, cv2.COLOR_RGB2BGR)
         return s
 
     def restart_episode(self):
@@ -57,7 +57,7 @@ class Unity3DPlayer(RLEnvironment):
         self.stats['score'].append(self.rwd_counter.sum)
 
     def current_state(self):
-        cv2.imwrite('state_%02d.png' % self.worker_id, self._ob)
+        #cv2.imwrite('state_%02d.png' % self.worker_id, self._ob)
         return self._ob
 
     def action(self, act):
@@ -66,8 +66,6 @@ class Unity3DPlayer(RLEnvironment):
             env_info = self.gymenv.step(np.asarray([env_act]))[self.brain_idx]
             self._ob = self._process_state(env_info.observations[0][0])
             reward = env_info.rewards[0]
-            if reward == 0.0:
-                reward = 0.001
             done = env_info.local_done[0]
             if done:
                 break            
