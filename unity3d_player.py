@@ -68,9 +68,6 @@ class Unity3DPlayer(RLEnvironment):
             reward = env_info.rewards[0]
             done = env_info.local_done[0]
 
-            if reward > 0.0 and done:
-                reward = 1.0 - self.rwd_counter.sum
-
             if done:
                 break            
         self.rwd_counter.feed(reward)
@@ -89,18 +86,17 @@ class Unity3DPlayer(RLEnvironment):
 if __name__ == '__main__':
     import sys
     from tqdm import *
-    p = Unity3DPlayer(env_name='Navigation', base_port=9000, worker_id=0, mode=False)
+    p = Unity3DPlayer(env_name='Follow-train', base_port=9000, worker_id=0, mode=False)
     p.restart_episode()
     try:
         while True:
-            for i in tqdm(range(10)):
-                print(i)
+            for i in tqdm(range(1000)):
                 act = p.get_action_space().sample()
                 r, done = p.action(act)
                 obs = p.current_state()
-                cv2.imwrite('img_%03d.png' % i, obs)
-                print(obs)
-            break
+                if done:
+                    print (done)
+            
     finally:
         p.close()
 
