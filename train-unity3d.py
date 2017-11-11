@@ -13,7 +13,8 @@ import argparse
 import multiprocessing
 import threading
 
-import cv2
+from PIL import Image
+#import cv2
 import tensorflow as tf
 import six
 from six.moves import queue
@@ -49,9 +50,9 @@ CHANNEL = FRAME_HISTORY * 3
 IMAGE_SHAPE3 = IMAGE_SIZE + (CHANNEL,)
 
 LOCAL_TIME_MAX = 5
-STEPS_PER_EPOCH = 600
-EVAL_EPISODE = 5
-BATCH_SIZE = 128
+STEPS_PER_EPOCH = 3000
+EVAL_EPISODE = 10
+BATCH_SIZE = 16
 PREDICT_BATCH_SIZE = 15     # batch for efficient forward
 SIMULATOR_PROC = None
 PREDICTOR_THREAD_PER_GPU = 1
@@ -76,7 +77,8 @@ def get_player(base_port, worker_id, viz=False, train=False, dumpdir=None, no_wr
     u3dpl = Unity3DPlayer(env_name=ENV_NAME, worker_id=worker_id, base_port=base_port, mode=train)
     if no_wrappers:
         return u3dpl
-    pl = MapPlayerState(u3dpl, lambda img: cv2.resize(img, IMAGE_SIZE[::-1]))
+    #pl = MapPlayerState(u3dpl, lambda img: cv2.resize(img, IMAGE_SIZE[::-1]))
+    pl = MapPlayerState(u3dpl, lambda img: np.array(Image.fromarray(img).resize(IMAGE_SIZE, resample=Image.BILINEAR), dtype=np.uint8))
     pl = HistoryFramePlayer(pl, FRAME_HISTORY)
     if not train:
         pl = PreventStuckPlayer(pl, 30, 1)
@@ -118,7 +120,7 @@ class Model(ModelDesc):
             l = MaxPooling('pool2', l, 2)
             l = Conv2D('conv3', l, out_channel=64, kernel_shape=3)
         '''
-        l, end_point = resnet_v2.resnet_v2_101(image)
+        l, end_point = resnet_v2.resnet_v2_101(image, is_training=True)
         l = FullyConnected('fc0', l, 512, nl=tf.identity)
         l = PReLU('prelu', l)
         logits = FullyConnected('fc-pi', l, out_dim=NUM_ACTIONS, nl=tf.identity)    # unnormalized policy
@@ -267,8 +269,8 @@ def get_config():
         dataflow=dataflow,
         callbacks=[
             ModelSaver(),
-            ScheduledHyperParamSetter('learning_rate', [(200, 0.0003), (1200, 0.0001)]),
-            ScheduledHyperParamSetter('entropy_beta', [(800, 0.005)]),
+            ScheduledHyperParamSetter('learning_rate', [(20, 0.0003), (120, 0.0001)]),
+            ScheduledHyperParamSetter('entropy_beta', [(80, 0.005)]),
             HumanHyperParamSetter('learning_rate'),
             HumanHyperParamSetter('entropy_beta'),
             master,
@@ -290,6 +292,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--gpu', help='comma separated list of GPU(s) to use.')
     parser.add_argument('--load', help='load model')
+    parser.add_argument('--resnet_load', help='load resnet model', type=str, default=None)
     parser.add_argument('--base_port', help='base port', required=True, type=int)
     parser.add_argument('--n_proc', help='n_proc', required=True, type=int)
     parser.add_argument('--env', help='env', default='Navigation')
@@ -337,11 +340,14 @@ if __name__ == '__main__':
             # gym.upload(output, api_key='xxx')
         '''
     else:
-        dirname = os.path.join('train_log', 'train-unity3d-{}'.format(ENV_NAME))
+        dirname = os.path.join('train_log', 'train-unity3d-resnet-baseline-{}'.format(ENV_NAME))
         logger.set_logger_dir(dirname)
-
+        
         config = get_config()
         if args.load:
             config.session_init = get_model_loader(args.load)
+        if args.resnet_load:
+            logger.info('Init ResNet: {}'.format(args.resnet_load))
+            config.session_init = get_model_loader(args.resnet_load)
         trainer = QueueInputTrainer if config.nr_tower == 1 else AsyncMultiGPUTrainer
         trainer(config).train()

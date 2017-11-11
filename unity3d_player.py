@@ -23,11 +23,12 @@ class Unity3DPlayer(RLEnvironment):
                     (-0.5, -1.0) ] # Backward-Left 
     '''
     ACTION_TABLE = [(1.0 * ACTION_SCALE, 0.0 * ACTION_SCALE),
-                    (1.0 * ACTION_SCALE, 1.0 * ACTION_SCALE),
-                    (1.0 * ACTION_SCALE, -1.0 * ACTION_SCALE)]
+                    (1.0 * ACTION_SCALE, 2.0 * ACTION_SCALE),
+                    (1.0 * ACTION_SCALE, -2.0 * ACTION_SCALE)]
 
     def __init__(self, env_name, base_port, worker_id, mode, skip=1, dumpdir=None, viz=False, auto_restart=True):
         self.gymenv = UnityEnvironment(file_name=env_name, base_port=base_port, worker_id=worker_id)
+        print(str(self.gymenv))
         self.skip = skip
         self.brain_idx = self.gymenv.brain_names[0]
         self.mode = mode
@@ -42,7 +43,7 @@ class Unity3DPlayer(RLEnvironment):
 
     def _process_state(self, s):
         s = (s * 255.0).astype(np.uint8)
-        s = cv2.cvtColor(s, cv2.COLOR_RGB2BGR)
+        #s = cv2.cvtColor(s, cv2.COLOR_RGB2BGR)
         return s
 
     def restart_episode(self):
@@ -56,7 +57,7 @@ class Unity3DPlayer(RLEnvironment):
         self.stats['score'].append(self.rwd_counter.sum)
 
     def current_state(self):
-        cv2.imwrite('state_%02d.png' % self.worker_id, self._ob)
+        #cv2.imwrite('state_%02d.png' % self.worker_id, self._ob)
         return self._ob
 
     def action(self, act):
@@ -66,6 +67,7 @@ class Unity3DPlayer(RLEnvironment):
             self._ob = self._process_state(env_info.observations[0][0])
             reward = env_info.rewards[0]
             done = env_info.local_done[0]
+
             if done:
                 break            
         self.rwd_counter.feed(reward)
@@ -84,11 +86,12 @@ class Unity3DPlayer(RLEnvironment):
 if __name__ == '__main__':
     import sys
     from tqdm import *
-    p = Unity3DPlayer(env_name='Navigation-random', base_port=9999, worker_id=0, mode=False)
+    p = Unity3DPlayer(env_name='Navigation', base_port=9000, worker_id=0, mode=False)
     p.restart_episode()
     try:
         while True:
             for i in tqdm(range(10)):
+                print(i)
                 act = p.get_action_space().sample()
                 r, done = p.action(act)
                 obs = p.current_state()
