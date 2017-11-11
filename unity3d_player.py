@@ -67,6 +67,10 @@ class Unity3DPlayer(RLEnvironment):
             self._ob = self._process_state(env_info.observations[0][0])
             reward = env_info.rewards[0]
             done = env_info.local_done[0]
+
+            if reward > 0.0 and done:
+                reward = 1.0 - self.rwd_counter.sum
+
             if done:
                 break            
         self.rwd_counter.feed(reward)
