@@ -84,14 +84,16 @@ class SimulatorProcessStateExchange(SimulatorProcessBase):
         s2c_socket.connect(self.s2c)
 
         state = player.current_state()
+        goal = player.current_goal()
         reward, isOver = 0, False
         while True:
             c2s_socket.send(dumps(
-                (self.identity, state, reward, isOver)),
+                (self.identity, state, reward, isOver, goal)),
                 copy=False)
             action = loads(s2c_socket.recv(copy=False).bytes)
             reward, isOver = player.action(action)
             state = player.current_state()
+            goal = player.current_goal()
 
 
 # compatibility
@@ -145,7 +147,7 @@ class SimulatorMaster(threading.Thread):
         try:
             while True:
                 msg = loads(self.c2s_socket.recv(copy=False).bytes)
-                ident, state, reward, isOver = msg
+                ident, state, reward, isOver, goal = msg
                 # TODO check history and warn about dead client
                 client = self.clients[ident]
 
@@ -158,7 +160,7 @@ class SimulatorMaster(threading.Thread):
                     else:
                         self._on_datapoint(ident)
                 # feed state and return action
-                self._on_state(state, ident)
+                self._on_state((state, goal), ident)
         except zmq.ContextTerminated:
             logger.info("[Simulator] Context was terminated.")
 

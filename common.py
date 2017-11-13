@@ -19,7 +19,8 @@ from tensorpack.utils.utils import get_tqdm_kwargs
 def play_one_episode(player, func, verbose=False):
     def f(s):
         spc = player.get_action_space()
-        act = func([[s]])[0][0].argmax()
+        g = player.current_goal()
+        act = func([[s], [g]])[0][0].argmax()
         if random.random() < 0.001:
             act = spc.sample()
         if verbose:
@@ -97,7 +98,8 @@ def eval_model_multithread(cfg, nr_eval, get_player_fn):
 def eval_one_episode(player, func, verbose=False):
     def f(s):
         spc = player.get_action_space()
-        probs = func([[s]])[0][0]
+        g = player.current_goal()
+        probs = func([[s], [g]])[0][0]
         act = np.random.choice(range(spc.num_actions()), p=probs)
         return act
     return (player.play_one_episode(f))

@@ -26,10 +26,12 @@ class Unity3DPlayer(RLEnvironment):
                     (1.0 * ACTION_SCALE, 1.0 * ACTION_SCALE),
                     (1.0 * ACTION_SCALE, -1.0 * ACTION_SCALE)]
 
-    def __init__(self, env_name, base_port, worker_id, mode, skip=1, dumpdir=None, viz=False, auto_restart=True):
+    def __init__(self, env_name, base_port, worker_id, mode, skip=1, dumpdir=None, viz=False, auto_restart=True, num_goal=4):
         self.gymenv = UnityEnvironment(file_name=env_name, base_port=base_port, worker_id=worker_id)
         print(str(self.gymenv))
         self.skip = skip
+        self.num_goal = num_goal
+        self.goal = None
         self.brain_idx = self.gymenv.brain_names[0]
         self.mode = mode
         self.reset_stat()
@@ -51,6 +53,7 @@ class Unity3DPlayer(RLEnvironment):
         self.rwd_counter.feed(0)
         env_info = self.gymenv.reset(train_mode=self.mode)[self.brain_idx]
         self._ob = self._process_state(env_info.observations[0][0])
+        self.goal = np.random.randint(low=0, high=self.num_goal - 1)
         return self._ob
 
     def finish_episode(self):
@@ -59,6 +62,9 @@ class Unity3DPlayer(RLEnvironment):
     def current_state(self):
         #cv2.imwrite('state_%02d.png' % self.worker_id, self._ob)
         return self._ob
+
+    def current_goal(self):
+        return self.goal
 
     def action(self, act):
         env_act = self.ACTION_TABLE[act]
@@ -84,6 +90,7 @@ class Unity3DPlayer(RLEnvironment):
 
     def close(self):
         self.gymenv.close()
+
 
 if __name__ == '__main__':
     import sys
