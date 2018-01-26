@@ -13,8 +13,7 @@ import argparse
 import multiprocessing
 import threading
 
-#import cv2
-from PIL import Image
+import cv2
 import tensorflow as tf
 import six
 from six.moves import queue
@@ -43,15 +42,15 @@ else:
     CancelledError = Exception
 
 IMAGE_SIZE = (84, 84)
-FRAME_HISTORY = 1
+FRAME_HISTORY = 4
 GAMMA = 0.99
 CHANNEL = FRAME_HISTORY * 3
 IMAGE_SHAPE3 = IMAGE_SIZE + (CHANNEL,)
 
-LOCAL_TIME_MAX = 5
-STEPS_PER_EPOCH = 30
-EVAL_EPISODE = 10
-BATCH_SIZE = 30
+LOCAL_TIME_MAX = 50
+STEPS_PER_EPOCH = 600
+EVAL_EPISODE = 5
+BATCH_SIZE = 128
 PREDICT_BATCH_SIZE = 15     # batch for efficient forward
 SIMULATOR_PROC = None
 PREDICTOR_THREAD_PER_GPU = 1
@@ -64,52 +63,25 @@ SIMULATOR_IP_ADDRESS = '140.114.89.72'
 EVAL_PORT = None
 ACTION_SPACE_PORT = None
 
-DUMP_DIR = None
-
-import cv2
-
-class RecordPlayer(ProxyPlayer):
-    def __init__(self, pl, dump_dir):
-        super(RecordPlayer, self).__init__(pl)
-        self.dump_dir = dump_dir
-        self.timestep = 0
-        #self.fourcc = cv2.VideoWriter_fourcc(*'XVID')
-        #self.out = cv2.VideoWriter('%s.avi' % self.dump_dir, self.fourcc, 30.0, (640,480))
-
-    def current_state(self):
-        s = super(RecordPlayer, self).current_state()
-        if self.timestep % 4 == 0:
-            cv2.imwrite('%s/%06d.png' % (self.dump_dir, self.timestep), s)
-        self.timestep += 1
-        #self.out.write(s)
-        return s
-
-    def close(self):
-        self.out.release()
-
 class CloseablePlayer(ProxyPlayer):
-    def __init__(self, pl, close_targets):
+    def __init__(self, pl, close_target):
         super(CloseablePlayer, self).__init__(pl)
-        self.close_targets = close_targets
+        self.close_target = close_target
     def close(self):
-        for t in self.close_targets:
-            t.close()
+        self.close_target.close()
 
 def get_player(base_port, worker_id, viz=False, train=False, dumpdir=None, no_wrappers=False):
     # no_wrappers: for get raw player
     u3dpl = Unity3DPlayer(env_name=ENV_NAME, worker_id=worker_id, base_port=base_port, mode=train)
     if no_wrappers:
         return u3dpl
-    repl = RecordPlayer(u3dpl, dumpdir)
-    #pl = MapPlayerState(u3dpl, lambda img: cv2.resize(img, IMAGE_SIZE[::-1]))
-    pl = MapPlayerState(repl, lambda img: np.array(Image.fromarray(img).resize(IMAGE_SIZE, resample=Image.BILINEAR), dtype=np.uint8))
-
+    pl = MapPlayerState(u3dpl, lambda img: cv2.resize(img, IMAGE_SIZE[::-1]))
     pl = HistoryFramePlayer(pl, FRAME_HISTORY)
     if not train:
         pl = PreventStuckPlayer(pl, 30, 1)
     else:
         pl = LimitLengthPlayer(pl, 5000)
-    pl = CloseablePlayer(pl, [u3dpl, repl])
+    pl = CloseablePlayer(pl, u3dpl)
     return pl
 
 def get_eval_player(worker_id, train):
@@ -121,7 +93,7 @@ class MySimulatorWorker(SimulatorProcess):
         self.base_port = base_port
 
     def _build_player(self):
-        return get_player(base_port=self.base_port, worker_id=self.idx, train=True, dumpdir=DUMP_DIR)
+        return get_player(base_port=self.base_port, worker_id=self.idx, train=True)
 
 
 class Model(ModelDesc):
@@ -292,17 +264,21 @@ def get_config():
         dataflow=dataflow,
         callbacks=[
             ModelSaver(),
-            ScheduledHyperParamSetter('learning_rate', [(20, 0.0003), (120, 0.0001)]),
-            ScheduledHyperParamSetter('entropy_beta', [(80, 0.005)]),
+            ScheduledHyperParamSetter('learning_rate', [(200, 0.0003), (1200, 0.0001)]),
+            ScheduledHyperParamSetter('entropy_beta', [(800, 0.005)]),
             HumanHyperParamSetter('learning_rate'),
             HumanHyperParamSetter('entropy_beta'),
             master,
-            StartProcOrThread(master) 
+            StartProcOrThread(master),
+            PeriodicTrigger(Evaluator(
+                EVAL_EPISODE, ['state'], ['policy'], get_eval_player),
+                every_k_epochs=1),
+            
         ],
         session_creator=sesscreate.NewSessionCreator(
             config=get_default_sess_config(0.5)),
         steps_per_epoch=STEPS_PER_EPOCH,
-        max_epoch=10,
+        max_epoch=10000,
         tower=train_tower
     )
 
@@ -318,11 +294,9 @@ if __name__ == '__main__':
                         choices=['play', 'eval', 'train', 'gen_submit'], default='train')
     parser.add_argument('--output', help='output directory for submission', default='output_dir')
     parser.add_argument('--logdir', help='log directory', default=None)
-    parser.add_argument('--dumpdir', help='dump directory', default=None)
     parser.add_argument('--episode', help='number of episode to eval', default=100, type=int)
     args = parser.parse_args()
 
-    DUMP_DIR = args.dumpdir
     ENV_NAME = args.env
     SIMULATOR_PROC = args.n_proc
     EVAL_PORT = args.base_port + 1
@@ -350,7 +324,7 @@ if __name__ == '__main__':
             input_names=['state'],
             output_names=['policy'])
         if args.task == 'play':
-            play_model(cfg, get_player(base_port=args.base_port, worker_id=0, viz=0.01, dumpdir=DUMP_DIR), logdir=args.logdir)
+            play_model(cfg, get_player(base_port=8000, worker_id=0, viz=0.01))
         elif args.task == 'eval':
             eval_model_multithread(cfg, args.episode, get_eval_player)
         '''
@@ -362,9 +336,9 @@ if __name__ == '__main__':
         '''
     else:
         if args.logdir:
-            dirname = os.path.join('train_log', 'train-unity3d-{}-{}'.format(ENV_NAME, args.logdir))
+            dirname = os.path.join('train_log', 'train-unity3d-hist-4-{}-{}'.format(ENV_NAME, args.logdir))
         else:
-            dirname = os.path.join('train_log', 'train-unity3d-{}'.format(ENV_NAME))
+            dirname = os.path.join('train_log', 'train-unity3d-hist-4-{}'.format(ENV_NAME))
         logger.set_logger_dir(dirname)
 
         config = get_config()

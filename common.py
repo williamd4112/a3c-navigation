@@ -28,11 +28,14 @@ def play_one_episode(player, func, verbose=False):
     return np.mean(player.play_one_episode(f))
 
 
-def play_model(cfg, player):
+def play_model(cfg, player, logdir=None):
     predfunc = OfflinePredictor(cfg)
-    while True:
+    scores = []
+    for e in range(50):
         score = play_one_episode(player, predfunc)
-        print("Total:", score)
+        scores.append(score)
+        scores_arr = np.array(scores)
+        print('Score: %f, Mean: %f, Max: %f, Min: %f' % (score, scores_arr.mean(), scores_arr.max(), scores_arr.min()))
 
 
 def eval_with_funcs(predictors, nr_eval, get_player_fn):
